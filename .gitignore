@@ -31,7 +31,7 @@ go.work
 Thumbs.db
 
 # Local config (keep template)
-#configs/config.local.yaml
+configs/config.local.yaml
 
 # Logs
 *.log
