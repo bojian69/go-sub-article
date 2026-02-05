@@ -70,9 +70,12 @@ func (h *Handler) BatchGetArticles(c *gin.Context) {
 	requestID := uuid.New().String()
 	c.Set("request_id", requestID)
 
+	// Add requestID to context for service layer
+	ctx := service.WithRequestID(c.Request.Context(), requestID)
+
 	authorizerAppID := c.Param("authorizer_appid")
 
-	h.logger.Info("BatchGetArticles request",
+	h.logger.Info("[HTTP] BatchGetArticles request",
 		slog.String("request_id", requestID),
 		slog.String("authorizer_appid", authorizerAppID),
 	)
@@ -108,9 +111,9 @@ func (h *Handler) BatchGetArticles(c *gin.Context) {
 		NoContent:       noContent,
 	}
 
-	resp, err := h.articleService.BatchGetPublishedArticles(c.Request.Context(), req)
+	resp, err := h.articleService.BatchGetPublishedArticles(ctx, req)
 	if err != nil {
-		h.logger.Error("service error",
+		h.logger.Error("[HTTP] service error",
 			slog.String("request_id", requestID),
 			slog.String("error", err.Error()),
 		)
@@ -118,7 +121,7 @@ func (h *Handler) BatchGetArticles(c *gin.Context) {
 		return
 	}
 
-	h.logger.Info("BatchGetArticles success",
+	h.logger.Info("[HTTP] BatchGetArticles success",
 		slog.String("request_id", requestID),
 		slog.Int("total_count", resp.TotalCount),
 		slog.Int("item_count", resp.ItemCount),
@@ -132,10 +135,13 @@ func (h *Handler) GetArticle(c *gin.Context) {
 	requestID := uuid.New().String()
 	c.Set("request_id", requestID)
 
+	// Add requestID to context for service layer
+	ctx := service.WithRequestID(c.Request.Context(), requestID)
+
 	authorizerAppID := c.Param("authorizer_appid")
 	articleID := c.Param("article_id")
 
-	h.logger.Info("GetArticle request",
+	h.logger.Info("[HTTP] GetArticle request",
 		slog.String("request_id", requestID),
 		slog.String("authorizer_appid", authorizerAppID),
 		slog.String("article_id", articleID),
@@ -157,9 +163,9 @@ func (h *Handler) GetArticle(c *gin.Context) {
 		ArticleID:       articleID,
 	}
 
-	resp, err := h.articleService.GetPublishedArticle(c.Request.Context(), req)
+	resp, err := h.articleService.GetPublishedArticle(ctx, req)
 	if err != nil {
-		h.logger.Error("service error",
+		h.logger.Error("[HTTP] service error",
 			slog.String("request_id", requestID),
 			slog.String("error", err.Error()),
 		)
@@ -167,7 +173,7 @@ func (h *Handler) GetArticle(c *gin.Context) {
 		return
 	}
 
-	h.logger.Info("GetArticle success",
+	h.logger.Info("[HTTP] GetArticle success",
 		slog.String("request_id", requestID),
 		slog.Int("news_item_count", len(resp.NewsItem)),
 	)

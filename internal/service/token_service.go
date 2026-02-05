@@ -55,115 +55,210 @@ func NewTokenService(
 }
 
 // GetComponentToken returns the component_access_token.
-// It first checks the cache, then fetches from WeChat API if not found or expired.
 func (s *TokenServiceImpl) GetComponentToken(ctx context.Context) (string, error) {
+	requestID := GetRequestID(ctx)
 	componentAppID := s.config.Component.AppID
+	start := time.Now()
 
 	// Check cache first
+	cacheStart := time.Now()
 	token, err := s.cacheRepo.GetComponentToken(ctx, componentAppID)
+	cacheDuration := time.Since(cacheStart)
+
 	if err != nil {
-		s.logger.Warn("failed to get component token from cache, will fetch from API",
+		s.logger.Warn("[TokenService] cache read failed",
+			slog.String("request_id", requestID),
+			slog.String("type", "component"),
+			slog.String("appid", componentAppID),
+			slog.Duration("cache_duration", cacheDuration),
 			slog.String("error", err.Error()),
 		)
 	}
 
 	if token != "" {
+		s.logger.Debug("[TokenService] cache hit",
+			slog.String("request_id", requestID),
+			slog.String("type", "component"),
+			slog.String("appid", componentAppID),
+			slog.Duration("cache_duration", cacheDuration),
+		)
+
 		// Check if proactive refresh is needed
 		key := cache.FormatComponentTokenKey(componentAppID)
 		ttl, err := s.cacheRepo.GetTokenTTL(ctx, key)
 		if err == nil && ttl > 0 && ttl < ProactiveRefreshThreshold {
-			// Trigger async refresh
+			s.logger.Info("[TokenService] proactive refresh triggered",
+				slog.String("request_id", requestID),
+				slog.String("type", "component"),
+				slog.Duration("ttl_remaining", ttl),
+			)
 			go s.refreshComponentToken(context.Background())
 		}
 		return token, nil
 	}
 
+	s.logger.Debug("[TokenService] cache miss, fetching from API",
+		slog.String("request_id", requestID),
+		slog.String("type", "component"),
+		slog.String("appid", componentAppID),
+		slog.Duration("cache_duration", cacheDuration),
+	)
+
 	// Use singleflight to prevent duplicate refresh
-	result, err, _ := s.sfGroup.Do("component_token:"+componentAppID, func() (interface{}, error) {
+	result, err, shared := s.sfGroup.Do("component_token:"+componentAppID, func() (interface{}, error) {
 		return s.fetchAndCacheComponentToken(ctx)
 	})
 
+	totalDuration := time.Since(start)
 	if err != nil {
-		s.logger.Error("failed to get component token",
-			slog.String("component_appid", componentAppID),
+		s.logger.Error("[TokenService] failed to get component token",
+			slog.String("request_id", requestID),
+			slog.String("appid", componentAppID),
+			slog.Bool("shared", shared),
+			slog.Duration("total_duration", totalDuration),
 			slog.String("error", err.Error()),
 		)
 		return "", err
 	}
+
+	s.logger.Debug("[TokenService] component token acquired",
+		slog.String("request_id", requestID),
+		slog.String("appid", componentAppID),
+		slog.Bool("shared", shared),
+		slog.Duration("total_duration", totalDuration),
+	)
 
 	return result.(string), nil
 }
 
 // GetAuthorizerToken returns the authorizer_access_token for the given appid.
 func (s *TokenServiceImpl) GetAuthorizerToken(ctx context.Context, authorizerAppID string) (string, error) {
+	requestID := GetRequestID(ctx)
+	start := time.Now()
+
 	// Check cache first
+	cacheStart := time.Now()
 	token, err := s.cacheRepo.GetAuthorizerToken(ctx, authorizerAppID)
+	cacheDuration := time.Since(cacheStart)
+
 	if err != nil {
-		s.logger.Warn("failed to get authorizer token from cache, will fetch from API",
-			slog.String("authorizer_appid", authorizerAppID),
+		s.logger.Warn("[TokenService] cache read failed",
+			slog.String("request_id", requestID),
+			slog.String("type", "authorizer"),
+			slog.String("appid", authorizerAppID),
+			slog.Duration("cache_duration", cacheDuration),
 			slog.String("error", err.Error()),
 		)
 	}
 
 	if token != "" {
+		s.logger.Debug("[TokenService] cache hit",
+			slog.String("request_id", requestID),
+			slog.String("type", "authorizer"),
+			slog.String("appid", authorizerAppID),
+			slog.Duration("cache_duration", cacheDuration),
+		)
+
 		// Check if proactive refresh is needed
 		key := cache.FormatAuthorizerTokenKey(authorizerAppID)
 		ttl, err := s.cacheRepo.GetTokenTTL(ctx, key)
 		if err == nil && ttl > 0 && ttl < ProactiveRefreshThreshold {
-			// Trigger async refresh
+			s.logger.Info("[TokenService] proactive refresh triggered",
+				slog.String("request_id", requestID),
+				slog.String("type", "authorizer"),
+				slog.String("appid", authorizerAppID),
+				slog.Duration("ttl_remaining", ttl),
+			)
 			go s.refreshAuthorizerToken(context.Background(), authorizerAppID)
 		}
 		return token, nil
 	}
 
+	s.logger.Debug("[TokenService] cache miss, fetching from API",
+		slog.String("request_id", requestID),
+		slog.String("type", "authorizer"),
+		slog.String("appid", authorizerAppID),
+		slog.Duration("cache_duration", cacheDuration),
+	)
+
 	// Use singleflight to prevent duplicate refresh
-	result, err, _ := s.sfGroup.Do("authorizer_token:"+authorizerAppID, func() (interface{}, error) {
-		// Check if simple mode is enabled
+	result, err, shared := s.sfGroup.Do("authorizer_token:"+authorizerAppID, func() (interface{}, error) {
 		if s.config.IsSimpleMode() {
 			return s.fetchAndCacheSimpleModeToken(ctx, authorizerAppID)
 		}
 		return s.fetchAndCacheAuthorizerToken(ctx, authorizerAppID)
 	})
 
+	totalDuration := time.Since(start)
 	if err != nil {
-		s.logger.Error("failed to get authorizer token",
-			slog.String("authorizer_appid", authorizerAppID),
+		s.logger.Error("[TokenService] failed to get authorizer token",
+			slog.String("request_id", requestID),
+			slog.String("appid", authorizerAppID),
+			slog.Bool("shared", shared),
+			slog.Duration("total_duration", totalDuration),
 			slog.String("error", err.Error()),
 		)
 		return "", err
 	}
+
+	s.logger.Debug("[TokenService] authorizer token acquired",
+		slog.String("request_id", requestID),
+		slog.String("appid", authorizerAppID),
+		slog.Bool("shared", shared),
+		slog.Duration("total_duration", totalDuration),
+	)
 
 	return result.(string), nil
 }
 
 // fetchAndCacheComponentToken fetches component token from WeChat API and caches it.
 func (s *TokenServiceImpl) fetchAndCacheComponentToken(ctx context.Context) (string, error) {
+	requestID := GetRequestID(ctx)
+	start := time.Now()
+
 	req := &wechat.ComponentTokenRequest{
 		ComponentAppID:        s.config.Component.AppID,
 		ComponentAppSecret:    s.config.Component.AppSecret,
 		ComponentVerifyTicket: s.config.Component.VerifyTicket,
 	}
 
+	apiStart := time.Now()
 	resp, err := s.wechatClient.GetComponentAccessToken(ctx, req)
+	apiDuration := time.Since(apiStart)
+
 	if err != nil {
-		s.logger.Error("ALERT: failed to fetch component token from WeChat API",
-			slog.String("component_appid", s.config.Component.AppID),
+		s.logger.Error("[TokenService] WeChat API call failed",
+			slog.String("request_id", requestID),
+			slog.String("api", "GetComponentAccessToken"),
+			slog.String("appid", s.config.Component.AppID),
+			slog.Duration("api_duration", apiDuration),
 			slog.String("error", err.Error()),
 		)
 		return "", fmt.Errorf("failed to fetch component token: %w", err)
 	}
 
 	// Cache the token
-	if err := s.cacheRepo.SetComponentToken(ctx, s.config.Component.AppID, resp.ComponentAccessToken, resp.ExpiresIn); err != nil {
-		s.logger.Warn("failed to cache component token",
-			slog.String("error", err.Error()),
+	cacheStart := time.Now()
+	cacheErr := s.cacheRepo.SetComponentToken(ctx, s.config.Component.AppID, resp.ComponentAccessToken, resp.ExpiresIn)
+	cacheDuration := time.Since(cacheStart)
+
+	if cacheErr != nil {
+		s.logger.Warn("[TokenService] cache write failed",
+			slog.String("request_id", requestID),
+			slog.String("type", "component"),
+			slog.Duration("cache_duration", cacheDuration),
+			slog.String("error", cacheErr.Error()),
 		)
-		// Don't return error, token is still valid
 	}
 
-	s.logger.Info("component token refreshed successfully",
-		slog.String("component_appid", s.config.Component.AppID),
+	totalDuration := time.Since(start)
+	s.logger.Info("[TokenService] component token refreshed",
+		slog.String("request_id", requestID),
+		slog.String("appid", s.config.Component.AppID),
 		slog.Int("expires_in", resp.ExpiresIn),
+		slog.Duration("api_duration", apiDuration),
+		slog.Duration("cache_duration", cacheDuration),
+		slog.Duration("total_duration", totalDuration),
 	)
 
 	return resp.ComponentAccessToken, nil
@@ -171,6 +266,9 @@ func (s *TokenServiceImpl) fetchAndCacheComponentToken(ctx context.Context) (str
 
 // fetchAndCacheAuthorizerToken fetches authorizer token from WeChat API and caches it.
 func (s *TokenServiceImpl) fetchAndCacheAuthorizerToken(ctx context.Context, authorizerAppID string) (string, error) {
+	requestID := GetRequestID(ctx)
+	start := time.Now()
+
 	// Get authorizer config
 	authConfig, found := s.config.GetAuthorizerByAppID(authorizerAppID)
 	if !found {
@@ -178,8 +276,17 @@ func (s *TokenServiceImpl) fetchAndCacheAuthorizerToken(ctx context.Context, aut
 	}
 
 	// Get component token first
+	componentStart := time.Now()
 	componentToken, err := s.GetComponentToken(ctx)
+	componentDuration := time.Since(componentStart)
+
 	if err != nil {
+		s.logger.Error("[TokenService] failed to get component token for authorizer refresh",
+			slog.String("request_id", requestID),
+			slog.String("appid", authorizerAppID),
+			slog.Duration("component_duration", componentDuration),
+			slog.String("error", err.Error()),
+		)
 		return "", fmt.Errorf("failed to get component token: %w", err)
 	}
 
@@ -189,30 +296,103 @@ func (s *TokenServiceImpl) fetchAndCacheAuthorizerToken(ctx context.Context, aut
 		AuthorizerRefreshToken: authConfig.RefreshToken,
 	}
 
+	apiStart := time.Now()
 	resp, err := s.wechatClient.RefreshAuthorizerToken(ctx, componentToken, req)
+	apiDuration := time.Since(apiStart)
+
 	if err != nil {
-		s.logger.Error("ALERT: failed to refresh authorizer token from WeChat API",
-			slog.String("authorizer_appid", authorizerAppID),
+		s.logger.Error("[TokenService] WeChat API call failed",
+			slog.String("request_id", requestID),
+			slog.String("api", "RefreshAuthorizerToken"),
+			slog.String("appid", authorizerAppID),
+			slog.Duration("api_duration", apiDuration),
 			slog.String("error", err.Error()),
 		)
 		return "", fmt.Errorf("failed to refresh authorizer token: %w", err)
 	}
 
 	// Cache the token
-	if err := s.cacheRepo.SetAuthorizerToken(ctx, authorizerAppID, resp.AuthorizerAccessToken, resp.ExpiresIn); err != nil {
-		s.logger.Warn("failed to cache authorizer token",
-			slog.String("authorizer_appid", authorizerAppID),
-			slog.String("error", err.Error()),
+	cacheStart := time.Now()
+	cacheErr := s.cacheRepo.SetAuthorizerToken(ctx, authorizerAppID, resp.AuthorizerAccessToken, resp.ExpiresIn)
+	cacheDuration := time.Since(cacheStart)
+
+	if cacheErr != nil {
+		s.logger.Warn("[TokenService] cache write failed",
+			slog.String("request_id", requestID),
+			slog.String("type", "authorizer"),
+			slog.String("appid", authorizerAppID),
+			slog.Duration("cache_duration", cacheDuration),
+			slog.String("error", cacheErr.Error()),
 		)
-		// Don't return error, token is still valid
 	}
 
-	s.logger.Info("authorizer token refreshed successfully",
-		slog.String("authorizer_appid", authorizerAppID),
+	totalDuration := time.Since(start)
+	s.logger.Info("[TokenService] authorizer token refreshed",
+		slog.String("request_id", requestID),
+		slog.String("appid", authorizerAppID),
 		slog.Int("expires_in", resp.ExpiresIn),
+		slog.Duration("component_duration", componentDuration),
+		slog.Duration("api_duration", apiDuration),
+		slog.Duration("cache_duration", cacheDuration),
+		slog.Duration("total_duration", totalDuration),
 	)
 
 	return resp.AuthorizerAccessToken, nil
+}
+
+// fetchAndCacheSimpleModeToken fetches access_token directly using appid/appsecret (simple mode).
+func (s *TokenServiceImpl) fetchAndCacheSimpleModeToken(ctx context.Context, appID string) (string, error) {
+	requestID := GetRequestID(ctx)
+	start := time.Now()
+
+	// Get simple account config
+	account, found := s.config.GetSimpleAccountByAppID(appID)
+	if !found {
+		return "", fmt.Errorf("account not found in simple_mode.accounts: %s", appID)
+	}
+
+	// Fetch access_token from WeChat API
+	apiStart := time.Now()
+	resp, err := s.wechatClient.GetAccessToken(ctx, account.AppID, account.AppSecret)
+	apiDuration := time.Since(apiStart)
+
+	if err != nil {
+		s.logger.Error("[TokenService] WeChat API call failed (simple mode)",
+			slog.String("request_id", requestID),
+			slog.String("api", "GetAccessToken"),
+			slog.String("appid", appID),
+			slog.Duration("api_duration", apiDuration),
+			slog.String("error", err.Error()),
+		)
+		return "", fmt.Errorf("failed to fetch access_token: %w", err)
+	}
+
+	// Cache the token
+	cacheStart := time.Now()
+	cacheErr := s.cacheRepo.SetAuthorizerToken(ctx, appID, resp.AccessToken, resp.ExpiresIn)
+	cacheDuration := time.Since(cacheStart)
+
+	if cacheErr != nil {
+		s.logger.Warn("[TokenService] cache write failed",
+			slog.String("request_id", requestID),
+			slog.String("type", "simple_mode"),
+			slog.String("appid", appID),
+			slog.Duration("cache_duration", cacheDuration),
+			slog.String("error", cacheErr.Error()),
+		)
+	}
+
+	totalDuration := time.Since(start)
+	s.logger.Info("[TokenService] access_token refreshed (simple mode)",
+		slog.String("request_id", requestID),
+		slog.String("appid", appID),
+		slog.Int("expires_in", resp.ExpiresIn),
+		slog.Duration("api_duration", apiDuration),
+		slog.Duration("cache_duration", cacheDuration),
+		slog.Duration("total_duration", totalDuration),
+	)
+
+	return resp.AccessToken, nil
 }
 
 // refreshComponentToken refreshes component token asynchronously.
@@ -221,7 +401,9 @@ func (s *TokenServiceImpl) refreshComponentToken(ctx context.Context) {
 		return s.fetchAndCacheComponentToken(ctx)
 	})
 	if err != nil {
-		s.logger.Error("ALERT: proactive component token refresh failed",
+		s.logger.Error("[TokenService] proactive refresh failed",
+			slog.String("type", "component"),
+			slog.String("appid", s.config.Component.AppID),
 			slog.String("error", err.Error()),
 		)
 	}
@@ -236,66 +418,64 @@ func (s *TokenServiceImpl) refreshAuthorizerToken(ctx context.Context, authorize
 		return s.fetchAndCacheAuthorizerToken(ctx, authorizerAppID)
 	})
 	if err != nil {
-		s.logger.Error("ALERT: proactive authorizer token refresh failed",
-			slog.String("authorizer_appid", authorizerAppID),
+		s.logger.Error("[TokenService] proactive refresh failed",
+			slog.String("type", "authorizer"),
+			slog.String("appid", authorizerAppID),
 			slog.String("error", err.Error()),
 		)
 	}
-}
-
-// fetchAndCacheSimpleModeToken fetches access_token directly using appid/appsecret (simple mode).
-func (s *TokenServiceImpl) fetchAndCacheSimpleModeToken(ctx context.Context, appID string) (string, error) {
-	// Get simple account config
-	account, found := s.config.GetSimpleAccountByAppID(appID)
-	if !found {
-		return "", fmt.Errorf("account not found in simple_mode.accounts: %s", appID)
-	}
-
-	// Fetch access_token from WeChat API
-	resp, err := s.wechatClient.GetAccessToken(ctx, account.AppID, account.AppSecret)
-	if err != nil {
-		s.logger.Error("ALERT: failed to fetch access_token from WeChat API (simple mode)",
-			slog.String("appid", appID),
-			slog.String("error", err.Error()),
-		)
-		return "", fmt.Errorf("failed to fetch access_token: %w", err)
-	}
-
-	// Cache the token
-	if err := s.cacheRepo.SetAuthorizerToken(ctx, appID, resp.AccessToken, resp.ExpiresIn); err != nil {
-		s.logger.Warn("failed to cache access_token",
-			slog.String("appid", appID),
-			slog.String("error", err.Error()),
-		)
-	}
-
-	s.logger.Info("access_token refreshed successfully (simple mode)",
-		slog.String("appid", appID),
-		slog.Int("expires_in", resp.ExpiresIn),
-	)
-
-	return resp.AccessToken, nil
 }
 
 // InvalidateAndRefreshToken invalidates the cached token and fetches a new one.
-// This is used when the API returns token expired error.
 func (s *TokenServiceImpl) InvalidateAndRefreshToken(ctx context.Context, authorizerAppID string) (string, error) {
+	requestID := GetRequestID(ctx)
+	start := time.Now()
+
 	// Delete cached token first
 	key := cache.FormatAuthorizerTokenKey(authorizerAppID)
-	if err := s.cacheRepo.DeleteToken(ctx, key); err != nil {
-		s.logger.Warn("failed to delete cached token",
-			slog.String("authorizer_appid", authorizerAppID),
-			slog.String("error", err.Error()),
+	deleteStart := time.Now()
+	deleteErr := s.cacheRepo.DeleteToken(ctx, key)
+	deleteDuration := time.Since(deleteStart)
+
+	if deleteErr != nil {
+		s.logger.Warn("[TokenService] cache delete failed",
+			slog.String("request_id", requestID),
+			slog.String("appid", authorizerAppID),
+			slog.Duration("delete_duration", deleteDuration),
+			slog.String("error", deleteErr.Error()),
+		)
+	} else {
+		s.logger.Info("[TokenService] token invalidated",
+			slog.String("request_id", requestID),
+			slog.String("appid", authorizerAppID),
+			slog.Duration("delete_duration", deleteDuration),
 		)
 	}
 
-	s.logger.Info("token invalidated, fetching new token",
-		slog.String("authorizer_appid", authorizerAppID),
-	)
-
 	// Fetch new token
+	var token string
+	var err error
 	if s.config.IsSimpleMode() {
-		return s.fetchAndCacheSimpleModeToken(ctx, authorizerAppID)
+		token, err = s.fetchAndCacheSimpleModeToken(ctx, authorizerAppID)
+	} else {
+		token, err = s.fetchAndCacheAuthorizerToken(ctx, authorizerAppID)
 	}
-	return s.fetchAndCacheAuthorizerToken(ctx, authorizerAppID)
+
+	totalDuration := time.Since(start)
+	if err != nil {
+		s.logger.Error("[TokenService] invalidate and refresh failed",
+			slog.String("request_id", requestID),
+			slog.String("appid", authorizerAppID),
+			slog.Duration("total_duration", totalDuration),
+			slog.String("error", err.Error()),
+		)
+	} else {
+		s.logger.Info("[TokenService] invalidate and refresh completed",
+			slog.String("request_id", requestID),
+			slog.String("appid", authorizerAppID),
+			slog.Duration("total_duration", totalDuration),
+		)
+	}
+
+	return token, err
 }

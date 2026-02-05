@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/wechat"
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/wechat/client"
@@ -29,8 +30,8 @@ type BatchGetArticlesRequest struct {
 
 // BatchGetArticlesResponse represents the response of articles list.
 type BatchGetArticlesResponse struct {
-	TotalCount int                      `json:"total_count"`
-	ItemCount  int                      `json:"item_count"`
+	TotalCount int                       `json:"total_count"`
+	ItemCount  int                       `json:"item_count"`
 	Item       []wechat.PublishedArticle `json:"item"`
 }
 
@@ -67,15 +68,37 @@ func NewArticleService(
 
 // BatchGetPublishedArticles gets published articles list.
 func (s *ArticleServiceImpl) BatchGetPublishedArticles(ctx context.Context, req *BatchGetArticlesRequest) (*BatchGetArticlesResponse, error) {
+	// Ensure request ID exists
+	ctx, requestID := EnsureRequestID(ctx)
+	serviceStart := time.Now()
+
+	s.logger.Info("[BatchGetArticles] started",
+		slog.String("request_id", requestID),
+		slog.String("appid", req.AuthorizerAppID),
+		slog.Int("offset", req.Offset),
+		slog.Int("count", req.Count),
+	)
+
 	// Get authorizer token
+	tokenStart := time.Now()
 	token, err := s.tokenService.GetAuthorizerToken(ctx, req.AuthorizerAppID)
+	tokenDuration := time.Since(tokenStart)
+
 	if err != nil {
-		s.logger.Error("failed to get authorizer token",
-			slog.String("authorizer_appid", req.AuthorizerAppID),
+		s.logger.Error("[BatchGetArticles] failed to get token",
+			slog.String("request_id", requestID),
+			slog.String("appid", req.AuthorizerAppID),
+			slog.Duration("token_duration", tokenDuration),
+			slog.Duration("total_duration", time.Since(serviceStart)),
 			slog.String("error", err.Error()),
 		)
 		return nil, fmt.Errorf("failed to get authorizer token: %w", err)
 	}
+
+	s.logger.Debug("[BatchGetArticles] token acquired",
+		slog.String("request_id", requestID),
+		slog.Duration("token_duration", tokenDuration),
+	)
 
 	// Call WeChat API
 	wechatReq := &wechat.BatchGetRequest{
@@ -84,35 +107,84 @@ func (s *ArticleServiceImpl) BatchGetPublishedArticles(ctx context.Context, req 
 		NoContent: req.NoContent,
 	}
 
+	apiStart := time.Now()
 	resp, err := s.wechatClient.BatchGetPublishedArticles(ctx, token, wechatReq)
-	if err != nil {
-		// Check if token expired, retry with fresh token
-		if isTokenExpiredError(err) {
-			s.logger.Warn("token expired, refreshing and retrying",
-				slog.String("authorizer_appid", req.AuthorizerAppID),
-			)
-			token, err = s.tokenService.InvalidateAndRefreshToken(ctx, req.AuthorizerAppID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to refresh token: %w", err)
-			}
-			resp, err = s.wechatClient.BatchGetPublishedArticles(ctx, token, wechatReq)
-		}
+	apiDuration := time.Since(apiStart)
+
+	// Handle token expiry with retry
+	if err != nil && isTokenExpiredError(err) {
+		s.logger.Warn("[BatchGetArticles] token expired, retrying",
+			slog.String("request_id", requestID),
+			slog.String("appid", req.AuthorizerAppID),
+			slog.Duration("api_duration", apiDuration),
+			slog.String("original_error", err.Error()),
+		)
+
+		// Refresh token
+		refreshStart := time.Now()
+		token, err = s.tokenService.InvalidateAndRefreshToken(ctx, req.AuthorizerAppID)
+		refreshDuration := time.Since(refreshStart)
+
 		if err != nil {
-			s.logger.Error("failed to get published articles",
-				slog.String("authorizer_appid", req.AuthorizerAppID),
+			s.logger.Error("[BatchGetArticles] token refresh failed",
+				slog.String("request_id", requestID),
+				slog.String("appid", req.AuthorizerAppID),
+				slog.Duration("refresh_duration", refreshDuration),
+				slog.Duration("total_duration", time.Since(serviceStart)),
 				slog.String("error", err.Error()),
 			)
-			return nil, fmt.Errorf("failed to get published articles: %w", err)
+			return nil, fmt.Errorf("failed to refresh token: %w", err)
+		}
+
+		s.logger.Info("[BatchGetArticles] token refreshed, retrying API call",
+			slog.String("request_id", requestID),
+			slog.Duration("refresh_duration", refreshDuration),
+		)
+
+		// Retry API call
+		retryStart := time.Now()
+		resp, err = s.wechatClient.BatchGetPublishedArticles(ctx, token, wechatReq)
+		retryDuration := time.Since(retryStart)
+
+		if err != nil {
+			s.logger.Error("[BatchGetArticles] retry failed",
+				slog.String("request_id", requestID),
+				slog.String("appid", req.AuthorizerAppID),
+				slog.Duration("retry_api_duration", retryDuration),
+				slog.Duration("total_duration", time.Since(serviceStart)),
+				slog.String("error", err.Error()),
+			)
+		} else {
+			s.logger.Info("[BatchGetArticles] retry succeeded",
+				slog.String("request_id", requestID),
+				slog.Duration("retry_api_duration", retryDuration),
+			)
+			apiDuration = retryDuration // Update for final log
 		}
 	}
 
-	s.logger.Debug("got published articles",
-		slog.String("authorizer_appid", req.AuthorizerAppID),
+	if err != nil {
+		s.logger.Error("[BatchGetArticles] failed",
+			slog.String("request_id", requestID),
+			slog.String("appid", req.AuthorizerAppID),
+			slog.Duration("api_duration", apiDuration),
+			slog.Duration("total_duration", time.Since(serviceStart)),
+			slog.String("error", err.Error()),
+		)
+		return nil, fmt.Errorf("failed to get published articles: %w", err)
+	}
+
+	totalDuration := time.Since(serviceStart)
+	s.logger.Info("[BatchGetArticles] completed",
+		slog.String("request_id", requestID),
+		slog.String("appid", req.AuthorizerAppID),
 		slog.Int("total_count", resp.TotalCount),
 		slog.Int("item_count", resp.ItemCount),
+		slog.Duration("token_duration", tokenDuration),
+		slog.Duration("api_duration", apiDuration),
+		slog.Duration("total_duration", totalDuration),
 	)
 
-	// Return response transparently
 	return &BatchGetArticlesResponse{
 		TotalCount: resp.TotalCount,
 		ItemCount:  resp.ItemCount,
@@ -122,60 +194,130 @@ func (s *ArticleServiceImpl) BatchGetPublishedArticles(ctx context.Context, req 
 
 // GetPublishedArticle gets article details.
 func (s *ArticleServiceImpl) GetPublishedArticle(ctx context.Context, req *GetArticleRequest) (*GetArticleResponse, error) {
+	// Ensure request ID exists
+	ctx, requestID := EnsureRequestID(ctx)
+	serviceStart := time.Now()
+
+	s.logger.Info("[GetArticle] started",
+		slog.String("request_id", requestID),
+		slog.String("appid", req.AuthorizerAppID),
+		slog.String("article_id", req.ArticleID),
+	)
+
 	// Get authorizer token
+	tokenStart := time.Now()
 	token, err := s.tokenService.GetAuthorizerToken(ctx, req.AuthorizerAppID)
+	tokenDuration := time.Since(tokenStart)
+
 	if err != nil {
-		s.logger.Error("failed to get authorizer token",
-			slog.String("authorizer_appid", req.AuthorizerAppID),
+		s.logger.Error("[GetArticle] failed to get token",
+			slog.String("request_id", requestID),
+			slog.String("appid", req.AuthorizerAppID),
+			slog.Duration("token_duration", tokenDuration),
+			slog.Duration("total_duration", time.Since(serviceStart)),
 			slog.String("error", err.Error()),
 		)
 		return nil, fmt.Errorf("failed to get authorizer token: %w", err)
 	}
 
+	s.logger.Debug("[GetArticle] token acquired",
+		slog.String("request_id", requestID),
+		slog.Duration("token_duration", tokenDuration),
+	)
+
 	// Call WeChat API
+	apiStart := time.Now()
 	resp, err := s.wechatClient.GetPublishedArticle(ctx, token, req.ArticleID)
-	if err != nil {
-		// Check if token expired, retry with fresh token
-		if isTokenExpiredError(err) {
-			s.logger.Warn("token expired, refreshing and retrying",
-				slog.String("authorizer_appid", req.AuthorizerAppID),
-			)
-			token, err = s.tokenService.InvalidateAndRefreshToken(ctx, req.AuthorizerAppID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to refresh token: %w", err)
-			}
-			resp, err = s.wechatClient.GetPublishedArticle(ctx, token, req.ArticleID)
-		}
+	apiDuration := time.Since(apiStart)
+
+	// Handle token expiry with retry
+	if err != nil && isTokenExpiredError(err) {
+		s.logger.Warn("[GetArticle] token expired, retrying",
+			slog.String("request_id", requestID),
+			slog.String("appid", req.AuthorizerAppID),
+			slog.String("article_id", req.ArticleID),
+			slog.Duration("api_duration", apiDuration),
+			slog.String("original_error", err.Error()),
+		)
+
+		// Refresh token
+		refreshStart := time.Now()
+		token, err = s.tokenService.InvalidateAndRefreshToken(ctx, req.AuthorizerAppID)
+		refreshDuration := time.Since(refreshStart)
+
 		if err != nil {
-			s.logger.Error("failed to get article",
-				slog.String("authorizer_appid", req.AuthorizerAppID),
-				slog.String("article_id", req.ArticleID),
+			s.logger.Error("[GetArticle] token refresh failed",
+				slog.String("request_id", requestID),
+				slog.String("appid", req.AuthorizerAppID),
+				slog.Duration("refresh_duration", refreshDuration),
+				slog.Duration("total_duration", time.Since(serviceStart)),
 				slog.String("error", err.Error()),
 			)
-			return nil, fmt.Errorf("failed to get article: %w", err)
+			return nil, fmt.Errorf("failed to refresh token: %w", err)
+		}
+
+		s.logger.Info("[GetArticle] token refreshed, retrying API call",
+			slog.String("request_id", requestID),
+			slog.Duration("refresh_duration", refreshDuration),
+		)
+
+		// Retry API call
+		retryStart := time.Now()
+		resp, err = s.wechatClient.GetPublishedArticle(ctx, token, req.ArticleID)
+		retryDuration := time.Since(retryStart)
+
+		if err != nil {
+			s.logger.Error("[GetArticle] retry failed",
+				slog.String("request_id", requestID),
+				slog.String("appid", req.AuthorizerAppID),
+				slog.String("article_id", req.ArticleID),
+				slog.Duration("retry_api_duration", retryDuration),
+				slog.Duration("total_duration", time.Since(serviceStart)),
+				slog.String("error", err.Error()),
+			)
+		} else {
+			s.logger.Info("[GetArticle] retry succeeded",
+				slog.String("request_id", requestID),
+				slog.Duration("retry_api_duration", retryDuration),
+			)
+			apiDuration = retryDuration
 		}
 	}
 
-	s.logger.Debug("got article details",
-		slog.String("authorizer_appid", req.AuthorizerAppID),
+	if err != nil {
+		s.logger.Error("[GetArticle] failed",
+			slog.String("request_id", requestID),
+			slog.String("appid", req.AuthorizerAppID),
+			slog.String("article_id", req.ArticleID),
+			slog.Duration("api_duration", apiDuration),
+			slog.Duration("total_duration", time.Since(serviceStart)),
+			slog.String("error", err.Error()),
+		)
+		return nil, fmt.Errorf("failed to get article: %w", err)
+	}
+
+	totalDuration := time.Since(serviceStart)
+	s.logger.Info("[GetArticle] completed",
+		slog.String("request_id", requestID),
+		slog.String("appid", req.AuthorizerAppID),
 		slog.String("article_id", req.ArticleID),
 		slog.Int("news_item_count", len(resp.NewsItem)),
+		slog.Duration("token_duration", tokenDuration),
+		slog.Duration("api_duration", apiDuration),
+		slog.Duration("total_duration", totalDuration),
 	)
 
-	// Return response transparently
 	return &GetArticleResponse{
 		NewsItem: resp.NewsItem,
 	}, nil
 }
 
 // isTokenExpiredError checks if the error indicates token expiration.
-// WeChat API returns error codes 40001 (invalid credential) or 42001 (access_token expired)
 func isTokenExpiredError(err error) bool {
 	if err == nil {
 		return false
 	}
 	errMsg := err.Error()
-	// Check for WeChat token expired error codes
 	return strings.Contains(errMsg, "code=40001") ||
 		strings.Contains(errMsg, "code=42001")
 }
