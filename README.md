@@ -11,6 +11,8 @@
 - **多公众号支持** - 通过配置文件管理多个公众号
 - **双协议 API** - 同时提供 HTTP REST API 和 gRPC 接口
 - **高可用设计** - 使用 singleflight 防止并发刷新，支持重试机制
+- **结构化日志** - 基于 slog 的 JSON 日志，支持 TraceID/RequestID，兼容 ELK/Loki
+- **日志轮转** - 按天自动轮转，支持压缩和自动清理
 - **Web 测试界面** - 内置前端页面，方便测试 API
 - **Docker 部署** - 支持 Docker 和 docker-compose 一键部署
 
@@ -21,6 +23,7 @@
 - gRPC
 - Redis (Token 缓存)
 - Uber FX (依赖注入)
+- slog + lumberjack (结构化日志 + 按天轮转)
 - gopter (属性测试)
 
 ## 项目结构
@@ -31,12 +34,14 @@
 ├── cmd/server/             # 主程序入口
 ├── configs/                # 配置文件
 ├── docs/                   # API 文档
+├── logs/                   # 日志文件（按天轮转）
 ├── internal/
 │   ├── config/             # 配置加载
 │   ├── fx/                 # FX 模块
 │   ├── handler/
 │   │   ├── grpc/           # gRPC Handler
 │   │   └── http/           # HTTP Handler
+│   ├── logger/             # 日志模块（slog + 文件轮转）
 │   ├── repository/cache/   # Redis 缓存
 │   ├── service/            # 业务服务
 │   └── wechat/             # 微信 API 客户端
@@ -57,6 +62,17 @@
 适用于获取自己公众号的图文内容：
 
 ```yaml
+# 日志配置
+log:
+  level: "info"                    # debug, info, warn, error
+  output: "both"                   # console, file, both
+  service: "wechat-subscription-svc"
+  file:
+    path: "./logs"
+    filename: "app.log"
+    max_age: 30                    # 保留天数
+    compress: true                 # 压缩旧日志
+
 server:
   http_port: 8080
   grpc_port: 9090

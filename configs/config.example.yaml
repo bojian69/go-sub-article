@@ -101,3 +101,23 @@ wechat:
     #   refresh_token: "refreshtoken_xxx"   # authorizer_refresh_token
     # - app_id: "wxdef987654321"            # 可配置多个授权公众号
     #   refresh_token: "refreshtoken_yyy"
+
+# ============================================================
+# 日志配置
+# ============================================================
+# level: 日志级别 (debug, info, warn, error)
+# output: 输出方式 (console=控制台, file=文件, both=两者)
+# file.path: 日志文件目录
+# file.filename: 日志文件名
+# file.max_age: 日志保留天数
+# file.compress: 是否压缩旧日志
+# ============================================================
+log:
+  level: "info"                             # 日志级别
+  output: "both"                            # 输出方式: console, file, both
+  service: "wechat-subscription-svc"        # 服务名称（用于日志标识）
+  file:
+    path: "./logs"                          # 日志目录
+    filename: "app.log"                     # 日志文件名
+    max_age: 30                             # 保留天数
+    compress: true                          # 压缩旧日志

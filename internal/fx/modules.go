@@ -17,6 +17,7 @@ import (
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/config"
 	grpchandler "git.uhomes.net/uhs-go/wechat-subscription-svc/internal/handler/grpc"
 	httphandler "git.uhomes.net/uhs-go/wechat-subscription-svc/internal/handler/http"
+	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/logger"
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/repository/cache"
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/service"
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/wechat/client"
@@ -35,10 +36,31 @@ var ConfigModule = fx.Module("config",
 
 // LoggerModule provides logging.
 var LoggerModule = fx.Module("logger",
-	fx.Provide(func() *slog.Logger {
-		return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level: slog.LevelInfo,
-		}))
+	fx.Provide(func(cfg *config.Config) (*logger.Logger, error) {
+		logCfg := &logger.Config{
+			Level:   cfg.Log.Level,
+			Output:  cfg.Log.Output,
+			Service: cfg.Log.Service,
+			File: logger.FileConfig{
+				Path:     cfg.Log.File.Path,
+				Filename: cfg.Log.File.Filename,
+				MaxAge:   cfg.Log.File.MaxAge,
+				Compress: cfg.Log.File.Compress,
+			},
+		}
+
+		// Set defaults if not configured
+		if logCfg.Level == "" {
+			logCfg.Level = "info"
+		}
+		if logCfg.Output == "" {
+			logCfg.Output = "console"
+		}
+
+		return logger.New(logCfg)
+	}),
+	fx.Provide(func(l *logger.Logger) *slog.Logger {
+		return l.Logger
 	}),
 )
 

@@ -11,9 +11,26 @@ import (
 
 // Config represents the root configuration structure.
 type Config struct {
+	Log    LogConfig    `mapstructure:"log"`
 	Server ServerConfig `mapstructure:"server" validate:"required"`
 	Redis  RedisConfig  `mapstructure:"redis" validate:"required"`
 	WeChat WeChatConfig `mapstructure:"wechat" validate:"required"`
+}
+
+// LogConfig holds logging configuration.
+type LogConfig struct {
+	Level   string        `mapstructure:"level"`   // debug, info, warn, error
+	Output  string        `mapstructure:"output"`  // console, file, both
+	Service string        `mapstructure:"service"` // service name
+	File    LogFileConfig `mapstructure:"file"`
+}
+
+// LogFileConfig holds file logging configuration.
+type LogFileConfig struct {
+	Path     string `mapstructure:"path"`     // log directory
+	Filename string `mapstructure:"filename"` // log file name
+	MaxAge   int    `mapstructure:"max_age"`  // max days to retain
+	Compress bool   `mapstructure:"compress"` // compress rotated files
 }
 
 // ServerConfig holds HTTP and gRPC server configuration.
