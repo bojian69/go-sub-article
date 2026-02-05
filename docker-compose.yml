@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  wechat-subscription-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat-subscription-svc
+    ports:
+      - "8080:8080"   # HTTP API
+      - "9090:9090"   # gRPC API
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./configs:/app/configs:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - wechat-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: wechat-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - wechat-net
+
+volumes:
+  redis-data:
+
+networks:
+  wechat-net:
+    driver: bridge

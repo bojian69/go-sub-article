@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微信订阅服务 - API 测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background: linear-gradient(135deg, #07c160 0%, #06ae56 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+        header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        header p {
+            opacity: 0.9;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .card h2 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #07c160;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: #666;
+            font-size: 14px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #07c160;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .btn {
+            background: #07c160;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #06ae56;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: #666;
+        }
+        .btn-secondary:hover {
+            background: #555;
+        }
+        .response-area {
+            margin-top: 20px;
+        }
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .status {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.success {
+            background: #e6f7ed;
+            color: #07c160;
+        }
+        .status.error {
+            background: #ffebe8;
+            color: #dc3545;
+        }
+        .response-body {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 16px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .response-body pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            background: #07c160;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .endpoint {
+            background: #f8f9fa;
+            padding: 10px 16px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-family: monospace;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .method {
+            background: #07c160;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #1890ff;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            border-radius: 0 4px 4px 0;
+        }
+        .info-box p {
+            color: #333;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔗 微信订阅服务 API 测试</h1>
+            <p>WeChat Subscription Service - API Testing Console</p>
+        </header>
+
+        <div class="info-box">
+            <p>💡 <strong>使用说明：</strong>请先在 <code>configs/config.local.yaml</code> 中配置微信第三方平台信息和授权公众号，然后启动服务后即可测试 API。</p>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('list')">📋 获取图文列表</button>
+                <button class="tab" onclick="switchTab('detail')">📄 获取图文详情</button>
+            </div>
+
+            <!-- 获取图文列表 -->
+            <div id="tab-list" class="tab-content active">
+                <div class="endpoint">
+                    <span class="method">GET</span>
+                    <span>/v1/accounts/{authorizer_appid}/articles</span>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>公众号 AppID *</label>
+                        <input type="text" id="list-appid" placeholder="例如: wx1234567890abcdef">
+                    </div>
+                    <div class="form-group">
+                        <label>起始位置 (offset)</label>
+                        <input type="number" id="list-offset" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>返回数量 (count)</label>
+                        <input type="number" id="list-count" value="10" min="1" max="20">
+                    </div>
+                    <div class="form-group">
+                        <label>不返回内容 (no_content)</label>
+                        <select id="list-nocontent">
+                            <option value="0">返回内容</option>
+                            <option value="1">不返回内容</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button class="btn" onclick="fetchArticleList()" id="btn-list">
+                    发送请求
+                </button>
+
+                <div class="response-area" id="response-list" style="display: none;">
+                    <div class="response-header">
+                        <span>响应结果</span>
+                        <span class="status" id="status-list"></span>
+                    </div>
+                    <div class="response-body">
+                        <pre id="result-list"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 获取图文详情 -->
+            <div id="tab-detail" class="tab-content">
+                <div class="endpoint">
+                    <span class="method">GET</span>
+                    <span>/v1/accounts/{authorizer_appid}/articles/{article_id}</span>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>公众号 AppID *</label>
+                        <input type="text" id="detail-appid" placeholder="例如: wx1234567890abcdef">
+                    </div>
+                    <div class="form-group">
+                        <label>图文 ID *</label>
+                        <input type="text" id="detail-articleid" placeholder="例如: ARTICLE_ID_123">
+                    </div>
+                </div>
+                
+                <button class="btn" onclick="fetchArticleDetail()" id="btn-detail">
+                    发送请求
+                </button>
+
+                <div class="response-area" id="response-detail" style="display: none;">
+                    <div class="response-header">
+                        <span>响应结果</span>
+                        <span class="status" id="status-detail"></span>
+                    </div>
+                    <div class="response-body">
+                        <pre id="result-detail"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📖 API 文档</h2>
+            <p style="color: #666; line-height: 1.8;">
+                完整的 API 文档请查看 <a href="/docs/api.md" target="_blank" style="color: #07c160;">docs/api.md</a><br>
+                gRPC Proto 定义请查看 <a href="/api/proto/subscription.proto" target="_blank" style="color: #07c160;">api/proto/subscription.proto</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';  // 同源，留空
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tab).classList.add('active');
+        }
+
+        function setLoading(btnId, loading) {
+            const btn = document.getElementById(btnId);
+            if (loading) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="loading"></span>请求中...';
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '发送请求';
+            }
+        }
+
+        function showResponse(prefix, data, isSuccess) {
+            const responseArea = document.getElementById('response-' + prefix);
+            const statusEl = document.getElementById('status-' + prefix);
+            const resultEl = document.getElementById('result-' + prefix);
+            
+            responseArea.style.display = 'block';
+            statusEl.className = 'status ' + (isSuccess ? 'success' : 'error');
+            statusEl.textContent = isSuccess ? '成功' : '失败';
+            resultEl.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function fetchArticleList() {
+            const appid = document.getElementById('list-appid').value.trim();
+            if (!appid) {
+                alert('请输入公众号 AppID');
+                return;
+            }
+
+            const offset = document.getElementById('list-offset').value || 0;
+            const count = document.getElementById('list-count').value || 10;
+            const noContent = document.getElementById('list-nocontent').value;
+
+            setLoading('btn-list', true);
+
+            try {
+                const url = `${API_BASE}/v1/accounts/${appid}/articles?offset=${offset}&count=${count}&no_content=${noContent}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                showResponse('list', data, data.code === 0);
+            } catch (error) {
+                showResponse('list', { error: error.message }, false);
+            } finally {
+                setLoading('btn-list', false);
+            }
+        }
+
+        async function fetchArticleDetail() {
+            const appid = document.getElementById('detail-appid').value.trim();
+            const articleId = document.getElementById('detail-articleid').value.trim();
+            
+            if (!appid || !articleId) {
+                alert('请输入公众号 AppID 和图文 ID');
+                return;
+            }
+
+            setLoading('btn-detail', true);
+
+            try {
+                const url = `${API_BASE}/v1/accounts/${appid}/articles/${articleId}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                showResponse('detail', data, data.code === 0);
+            } catch (error) {
+                showResponse('detail', { error: error.message }, false);
+            } finally {
+                setLoading('btn-detail', false);
+            }
+        }
+    </script>
+</body>
+</html>

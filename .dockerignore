@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Build artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+coverage.out
+coverage.html
+
+# Documentation (keep docs/ for API docs)
+*.md
+!docs/*.md
+!README.md
+
+# Kiro specs
+.kiro/
+
+# Local config (use mounted volume instead)
+# configs/config.local.yaml
+
+# Temporary files
+*.tmp
+*.log

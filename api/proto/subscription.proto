@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package pb.subscription.v1;
+
+option go_package = "git.uhomes.net/uhs-go/wechat-subscription-svc/api/proto;subscriptionv1";
+
+// SubscriptionService provides WeChat subscription article APIs.
+service SubscriptionService {
+  // BatchGetPublishedArticles gets published articles list.
+  rpc BatchGetPublishedArticles(BatchGetArticlesRequest) returns (BatchGetArticlesResponse);
+
+  // GetPublishedArticle gets article details.
+  rpc GetPublishedArticle(GetArticleRequest) returns (GetArticleResponse);
+}
+
+// BatchGetArticlesRequest is the request for BatchGetPublishedArticles.
+message BatchGetArticlesRequest {
+  // authorizer_appid is the official account appid.
+  string authorizer_appid = 1;
+  // offset is the starting position.
+  int32 offset = 2;
+  // count is the number of articles to return (1-20).
+  int32 count = 3;
+  // no_content indicates whether to exclude content field (0 or 1).
+  int32 no_content = 4;
+}
+
+// BatchGetArticlesResponse is the response for BatchGetPublishedArticles.
+message BatchGetArticlesResponse {
+  // total_count is the total number of published articles.
+  int32 total_count = 1;
+  // item_count is the number of articles in this response.
+  int32 item_count = 2;
+  // item is the list of published articles.
+  repeated PublishedArticle item = 3;
+}
+
+// PublishedArticle represents a published article.
+message PublishedArticle {
+  // article_id is the unique identifier of the article.
+  string article_id = 1;
+  // content is the article content.
+  ArticleContent content = 2;
+  // update_time is the last update timestamp.
+  int64 update_time = 3;
+}
+
+// ArticleContent represents the content of an article.
+message ArticleContent {
+  // news_item is the list of news items.
+  repeated NewsItem news_item = 1;
+}
+
+// NewsItem represents a single news item.
+message NewsItem {
+  // title is the article title.
+  string title = 1;
+  // author is the article author.
+  string author = 2;
+  // digest is the article summary.
+  string digest = 3;
+  // content is the article HTML content.
+  string content = 4;
+  // content_source_url is the original article URL.
+  string content_source_url = 5;
+  // thumb_media_id is the cover image media ID.
+  string thumb_media_id = 6;
+  // thumb_url is the cover image URL.
+  string thumb_url = 7;
+  // need_open_comment indicates if comments are enabled.
+  int32 need_open_comment = 8;
+  // only_fans_can_comment indicates if only fans can comment.
+  int32 only_fans_can_comment = 9;
+  // url is the article URL.
+  string url = 10;
+  // is_deleted indicates if the article is deleted.
+  bool is_deleted = 11;
+}
+
+// GetArticleRequest is the request for GetPublishedArticle.
+message GetArticleRequest {
+  // authorizer_appid is the official account appid.
+  string authorizer_appid = 1;
+  // article_id is the article ID to retrieve.
+  string article_id = 2;
+}
+
+// GetArticleResponse is the response for GetPublishedArticle.
+message GetArticleResponse {
+  // news_item is the list of news items in the article.
+  repeated NewsItem news_item = 1;
+}
