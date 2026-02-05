@@ -25,6 +25,9 @@ type TokenService interface {
 
 	// GetAuthorizerToken returns the authorizer_access_token for the given appid
 	GetAuthorizerToken(ctx context.Context, authorizerAppID string) (string, error)
+
+	// InvalidateAndRefreshToken invalidates cached token and fetches a new one
+	InvalidateAndRefreshToken(ctx context.Context, authorizerAppID string) (string, error)
 }
 
 // TokenServiceImpl implements TokenService.
@@ -272,4 +275,27 @@ func (s *TokenServiceImpl) fetchAndCacheSimpleModeToken(ctx context.Context, app
 	)
 
 	return resp.AccessToken, nil
+}
+
+// InvalidateAndRefreshToken invalidates the cached token and fetches a new one.
+// This is used when the API returns token expired error.
+func (s *TokenServiceImpl) InvalidateAndRefreshToken(ctx context.Context, authorizerAppID string) (string, error) {
+	// Delete cached token first
+	key := cache.FormatAuthorizerTokenKey(authorizerAppID)
+	if err := s.cacheRepo.DeleteToken(ctx, key); err != nil {
+		s.logger.Warn("failed to delete cached token",
+			slog.String("authorizer_appid", authorizerAppID),
+			slog.String("error", err.Error()),
+		)
+	}
+
+	s.logger.Info("token invalidated, fetching new token",
+		slog.String("authorizer_appid", authorizerAppID),
+	)
+
+	// Fetch new token
+	if s.config.IsSimpleMode() {
+		return s.fetchAndCacheSimpleModeToken(ctx, authorizerAppID)
+	}
+	return s.fetchAndCacheAuthorizerToken(ctx, authorizerAppID)
 }

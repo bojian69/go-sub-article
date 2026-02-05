@@ -117,7 +117,7 @@ wechat:
     - app_id: "auth"
       refresh_token: "token"
 `,
-			errMsg: "AppID",
+			errMsg: "app_id",
 		},
 		{
 			name: "empty authorizers",
@@ -135,7 +135,7 @@ wechat:
     verify_ticket: "test"
   authorizers: []
 `,
-			errMsg: "Authorizers",
+			errMsg: "authorizers",
 		},
 		{
 			name: "authorizer missing refresh_token",
@@ -154,7 +154,7 @@ wechat:
   authorizers:
     - app_id: "auth"
 `,
-			errMsg: "RefreshToken",
+			errMsg: "refresh_token",
 		},
 	}
 

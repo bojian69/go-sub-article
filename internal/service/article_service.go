@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/wechat"
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/wechat/client"
@@ -85,11 +86,24 @@ func (s *ArticleServiceImpl) BatchGetPublishedArticles(ctx context.Context, req 
 
 	resp, err := s.wechatClient.BatchGetPublishedArticles(ctx, token, wechatReq)
 	if err != nil {
-		s.logger.Error("failed to get published articles",
-			slog.String("authorizer_appid", req.AuthorizerAppID),
-			slog.String("error", err.Error()),
-		)
-		return nil, fmt.Errorf("failed to get published articles: %w", err)
+		// Check if token expired, retry with fresh token
+		if isTokenExpiredError(err) {
+			s.logger.Warn("token expired, refreshing and retrying",
+				slog.String("authorizer_appid", req.AuthorizerAppID),
+			)
+			token, err = s.tokenService.InvalidateAndRefreshToken(ctx, req.AuthorizerAppID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to refresh token: %w", err)
+			}
+			resp, err = s.wechatClient.BatchGetPublishedArticles(ctx, token, wechatReq)
+		}
+		if err != nil {
+			s.logger.Error("failed to get published articles",
+				slog.String("authorizer_appid", req.AuthorizerAppID),
+				slog.String("error", err.Error()),
+			)
+			return nil, fmt.Errorf("failed to get published articles: %w", err)
+		}
 	}
 
 	s.logger.Debug("got published articles",
@@ -121,12 +135,25 @@ func (s *ArticleServiceImpl) GetPublishedArticle(ctx context.Context, req *GetAr
 	// Call WeChat API
 	resp, err := s.wechatClient.GetPublishedArticle(ctx, token, req.ArticleID)
 	if err != nil {
-		s.logger.Error("failed to get article",
-			slog.String("authorizer_appid", req.AuthorizerAppID),
-			slog.String("article_id", req.ArticleID),
-			slog.String("error", err.Error()),
-		)
-		return nil, fmt.Errorf("failed to get article: %w", err)
+		// Check if token expired, retry with fresh token
+		if isTokenExpiredError(err) {
+			s.logger.Warn("token expired, refreshing and retrying",
+				slog.String("authorizer_appid", req.AuthorizerAppID),
+			)
+			token, err = s.tokenService.InvalidateAndRefreshToken(ctx, req.AuthorizerAppID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to refresh token: %w", err)
+			}
+			resp, err = s.wechatClient.GetPublishedArticle(ctx, token, req.ArticleID)
+		}
+		if err != nil {
+			s.logger.Error("failed to get article",
+				slog.String("authorizer_appid", req.AuthorizerAppID),
+				slog.String("article_id", req.ArticleID),
+				slog.String("error", err.Error()),
+			)
+			return nil, fmt.Errorf("failed to get article: %w", err)
+		}
 	}
 
 	s.logger.Debug("got article details",
@@ -139,4 +166,16 @@ func (s *ArticleServiceImpl) GetPublishedArticle(ctx context.Context, req *GetAr
 	return &GetArticleResponse{
 		NewsItem: resp.NewsItem,
 	}, nil
+}
+
+// isTokenExpiredError checks if the error indicates token expiration.
+// WeChat API returns error codes 40001 (invalid credential) or 42001 (access_token expired)
+func isTokenExpiredError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	// Check for WeChat token expired error codes
+	return strings.Contains(errMsg, "code=40001") ||
+		strings.Contains(errMsg, "code=42001")
 }

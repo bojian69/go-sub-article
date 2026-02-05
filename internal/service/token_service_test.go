@@ -70,6 +70,14 @@ func (m *MockCacheRepository) GetTokenTTL(ctx context.Context, key string) (time
 	return m.ttls[key], nil
 }
 
+func (m *MockCacheRepository) DeleteToken(ctx context.Context, key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.authorizerTokens, key)
+	delete(m.componentTokens, key)
+	return nil
+}
+
 func (m *MockCacheRepository) Close() error {
 	return nil
 }
@@ -93,6 +101,7 @@ type MockWeChatClient struct {
 	componentTokenResp   *wechat.ComponentTokenResponse
 	authorizerTokenResp  *wechat.RefreshAuthorizerTokenResponse
 	apiCallCount         int32
+	apiDelay             time.Duration // Delay to simulate API latency
 	mu                   sync.Mutex
 }
 
@@ -110,13 +119,23 @@ func NewMockWeChatClient() *MockWeChatClient {
 	}
 }
 
+func (m *MockWeChatClient) SetAPIDelay(d time.Duration) {
+	m.apiDelay = d
+}
+
 func (m *MockWeChatClient) GetComponentAccessToken(ctx context.Context, req *wechat.ComponentTokenRequest) (*wechat.ComponentTokenResponse, error) {
 	atomic.AddInt32(&m.apiCallCount, 1)
+	if m.apiDelay > 0 {
+		time.Sleep(m.apiDelay)
+	}
 	return m.componentTokenResp, nil
 }
 
 func (m *MockWeChatClient) RefreshAuthorizerToken(ctx context.Context, componentToken string, req *wechat.RefreshAuthorizerTokenRequest) (*wechat.RefreshAuthorizerTokenResponse, error) {
 	atomic.AddInt32(&m.apiCallCount, 1)
+	if m.apiDelay > 0 {
+		time.Sleep(m.apiDelay)
+	}
 	return m.authorizerTokenResp, nil
 }
 
@@ -211,8 +230,8 @@ func TestProperty_SingleflightConcurrencyControl(t *testing.T) {
 
 	properties := gopter.NewProperties(parameters)
 
-	// Property: Concurrent requests result in single API call
-	// Note: Due to goroutine scheduling, we use a barrier to ensure all goroutines start together
+	// Property: Concurrent requests result in fewer API calls than total requests
+	// Due to singleflight, concurrent requests should be deduplicated
 	properties.Property("concurrent requests make single API call", prop.ForAll(
 		func(concurrency int) bool {
 			if concurrency < 2 || concurrency > 20 {
@@ -221,6 +240,9 @@ func TestProperty_SingleflightConcurrencyControl(t *testing.T) {
 
 			cacheRepo := NewMockCacheRepository()
 			wechatClient := NewMockWeChatClient()
+			wechatClient.ResetAPICallCount() // Ensure counter starts at 0
+			wechatClient.SetAPIDelay(50 * time.Millisecond) // Add delay to allow singleflight to work
+			
 			cfg := &config.WeChatConfig{
 				Component: config.ComponentConfig{
 					AppID:        "comp_appid",
@@ -243,21 +265,24 @@ func TestProperty_SingleflightConcurrencyControl(t *testing.T) {
 			errors := make([]error, concurrency)
 
 			// Use a barrier to ensure all goroutines start at the same time
+			readyWg := sync.WaitGroup{}
 			startBarrier := make(chan struct{})
 
 			for i := 0; i < concurrency; i++ {
 				wg.Add(1)
+				readyWg.Add(1)
 				go func(idx int) {
 					defer wg.Done()
-					<-startBarrier // Wait for signal to start
+					readyWg.Done()          // Signal that this goroutine is ready
+					<-startBarrier          // Wait for signal to start
 					token, err := svc.GetAuthorizerToken(ctx, "test_appid")
 					results[idx] = token
 					errors[idx] = err
 				}(i)
 			}
 
-			// Small delay to ensure all goroutines are waiting
-			time.Sleep(10 * time.Millisecond)
+			// Wait for all goroutines to be ready
+			readyWg.Wait()
 			// Release all goroutines at once
 			close(startBarrier)
 
@@ -277,8 +302,7 @@ func TestProperty_SingleflightConcurrencyControl(t *testing.T) {
 				}
 			}
 
-			// Only one API call should be made for authorizer token
-			// (component token is cached, so only 1 call for authorizer)
+			// Only one API call should be made due to singleflight
 			return wechatClient.GetAPICallCount() == 1
 		},
 		gen.IntRange(2, 10),

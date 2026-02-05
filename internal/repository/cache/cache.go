@@ -35,6 +35,9 @@ type Repository interface {
 	// GetTokenTTL returns the remaining TTL for a token
 	GetTokenTTL(ctx context.Context, key string) (time.Duration, error)
 
+	// DeleteToken deletes a cached token
+	DeleteToken(ctx context.Context, key string) error
+
 	// Close closes the Redis connection
 	Close() error
 }
@@ -118,6 +121,14 @@ func (r *RedisRepository) GetTokenTTL(ctx context.Context, key string) (time.Dur
 		return 0, fmt.Errorf("failed to get TTL: %w", err)
 	}
 	return ttl, nil
+}
+
+// DeleteToken deletes a cached token.
+func (r *RedisRepository) DeleteToken(ctx context.Context, key string) error {
+	if err := r.client.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("failed to delete token: %w", err)
+	}
+	return nil
 }
 
 // Close closes the Redis connection.

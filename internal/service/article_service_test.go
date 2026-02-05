@@ -28,6 +28,10 @@ func (m *MockTokenService) GetAuthorizerToken(ctx context.Context, authorizerApp
 	return m.token, m.err
 }
 
+func (m *MockTokenService) InvalidateAndRefreshToken(ctx context.Context, authorizerAppID string) (string, error) {
+	return m.token, m.err
+}
+
 // MockArticleWeChatClient is a mock WeChat client for article tests
 type MockArticleWeChatClient struct {
 	batchGetResp   *wechat.BatchGetResponse
