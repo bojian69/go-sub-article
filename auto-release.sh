@@ -39,7 +39,7 @@ FORCE_RUN=false
 DOCKER_NAMESPACE=""
 CONTAINER_NAME="wechat-subscription-svc"
 IMAGE_NAME="wechat-subscription-svc"
-HTTP_PORT=8080
+HTTP_PORT=8090
 GRPC_PORT=9090
 
 # 显示使用说明
@@ -294,7 +294,7 @@ mkdir -p "$(pwd)/logs"
 echo "启动新容器..."
 docker run -d \
     --name ${CONTAINER_NAME} \
-    -p ${HTTP_PORT}:8080 \
+    -p ${HTTP_PORT}:8090 \
     -p ${GRPC_PORT}:9090 \
     -v ${CONFIG_FILE}:/app/configs/config.prod.yaml:ro \
     -v $(pwd)/logs:/app/logs \
