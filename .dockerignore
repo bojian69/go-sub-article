@@ -30,7 +30,8 @@ coverage.html
 .kiro/
 
 # Local config (use mounted volume instead)
-# configs/config.local.yaml
+configs/config.local.yaml
+configs/config.prod.yaml
 
 # Temporary files
 *.tmp

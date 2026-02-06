@@ -32,6 +32,8 @@ Thumbs.db
 
 # Local config (keep template)
 configs/config.local.yaml
+configs/config.prod.yaml
+configs/config.prod.yaml
 
 # Logs
 *.log

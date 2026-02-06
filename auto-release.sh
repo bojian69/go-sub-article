@@ -281,7 +281,7 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
 fi
 
 # 检查配置文件
-CONFIG_FILE="$(pwd)/configs/config.local.yaml"
+CONFIG_FILE="$(pwd)/configs/config.prod.yaml"
 if [ ! -f "$CONFIG_FILE" ]; then
     echo -e "${YELLOW}警告: 配置文件不存在: ${CONFIG_FILE}${NC}"
     echo -e "${YELLOW}请从 config.example.yaml 复制并配置${NC}"
@@ -296,9 +296,9 @@ docker run -d \
     --name ${CONTAINER_NAME} \
     -p ${HTTP_PORT}:8080 \
     -p ${GRPC_PORT}:9090 \
-    -v ${CONFIG_FILE}:/app/configs/config.local.yaml:ro \
+    -v ${CONFIG_FILE}:/app/configs/config.prod.yaml:ro \
     -v $(pwd)/logs:/app/logs \
-    -e APP_ENV=local \
+    -e APP_ENV=prod \
     --restart unless-stopped \
     ${RUN_IMAGE}
 
