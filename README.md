@@ -201,6 +201,54 @@ make docker-up      # 启动 Docker Compose
 make docker-down    # 停止 Docker Compose
 ```
 
+## 自动发布
+
+项目提供自动发布脚本，支持检测代码更新、构建镜像、运行容器。
+
+### auto-release.sh
+
+自动检测远程更新，构建 Docker 镜像并运行：
+
+```bash
+# 添加执行权限
+chmod +x auto-release.sh
+
+# 仅本地构建和运行
+./auto-release.sh
+
+# 构建并推送到 Docker Hub
+./auto-release.sh myusername
+
+# 强制执行（忽略 commit 对比）
+./auto-release.sh -f
+
+# 强制构建并推送
+./auto-release.sh -f myusername
+```
+
+**版本标签规则：** `v年.月.日`，如 `v26.2.6`，同一天多次发布自动递增：`v26.2.6.1`
+
+### setup-cron.sh
+
+设置定时任务，每 5 分钟自动检查更新：
+
+```bash
+# 添加执行权限
+chmod +x setup-cron.sh
+
+# 设置定时任务（仅本地构建）
+./setup-cron.sh
+
+# 设置定时任务（构建并推送）
+./setup-cron.sh myusername
+
+# 查看定时任务
+crontab -l
+
+# 查看执行日志
+tail -f auto-release.log
+```
+
 ## 架构设计
 
 ```
