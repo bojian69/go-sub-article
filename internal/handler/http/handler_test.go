@@ -45,6 +45,11 @@ func (m *MockArticleService) GetPublishedArticle(ctx context.Context, req *servi
 	return m.getArticleResp, nil
 }
 
+// newTestHandler creates a handler for testing (nil cacheRepo is fine for unit tests).
+func newTestHandler(svc service.ArticleService) *Handler {
+	return NewHandler(svc, nil, slog.Default())
+}
+
 // Property 6: Request Parameter Validation
 // For any request with invalid parameters, the handler SHALL reject with validation error.
 // **Validates: Requirements 2.1, 2.2, 2.4, 3.1, 3.2**
@@ -66,7 +71,7 @@ func TestProperty_RequestParameterValidation(t *testing.T) {
 			mockSvc := &MockArticleService{
 				batchGetResp: &service.BatchGetArticlesResponse{},
 			}
-			handler := NewHandler(mockSvc, slog.Default())
+			handler := newTestHandler(mockSvc)
 
 			r := gin.New()
 			handler.RegisterRoutes(r)
@@ -90,7 +95,7 @@ func TestProperty_RequestParameterValidation(t *testing.T) {
 			mockSvc := &MockArticleService{
 				batchGetResp: &service.BatchGetArticlesResponse{},
 			}
-			handler := NewHandler(mockSvc, slog.Default())
+			handler := newTestHandler(mockSvc)
 
 			r := gin.New()
 			handler.RegisterRoutes(r)
@@ -130,7 +135,7 @@ func TestProperty_HTTPResponseStructure(t *testing.T) {
 					ItemCount:  itemCount,
 				},
 			}
-			handler := NewHandler(mockSvc, slog.Default())
+			handler := newTestHandler(mockSvc)
 
 			r := gin.New()
 			handler.RegisterRoutes(r)
@@ -160,7 +165,7 @@ func TestProperty_HTTPResponseStructure(t *testing.T) {
 			}
 
 			mockSvc := &MockArticleService{}
-			handler := NewHandler(mockSvc, slog.Default())
+			handler := newTestHandler(mockSvc)
 
 			r := gin.New()
 			handler.RegisterRoutes(r)
@@ -203,7 +208,7 @@ func TestProperty_RequestIDUniqueness(t *testing.T) {
 			mockSvc := &MockArticleService{
 				batchGetResp: &service.BatchGetArticlesResponse{},
 			}
-			handler := NewHandler(mockSvc, slog.Default())
+			handler := newTestHandler(mockSvc)
 
 			r := gin.New()
 			handler.RegisterRoutes(r)
@@ -247,7 +252,7 @@ func TestHandler_BatchGetArticles_Success(t *testing.T) {
 		},
 	}
 
-	handler := NewHandler(mockSvc, slog.Default())
+	handler := newTestHandler(mockSvc)
 	r := gin.New()
 	handler.RegisterRoutes(r)
 
@@ -293,7 +298,7 @@ func TestHandler_BatchGetArticles_ValidationErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockSvc := &MockArticleService{}
-			handler := NewHandler(mockSvc, slog.Default())
+			handler := newTestHandler(mockSvc)
 			r := gin.New()
 			handler.RegisterRoutes(r)
 
@@ -322,7 +327,7 @@ func TestHandler_GetArticle_Success(t *testing.T) {
 		},
 	}
 
-	handler := NewHandler(mockSvc, slog.Default())
+	handler := newTestHandler(mockSvc)
 	r := gin.New()
 	handler.RegisterRoutes(r)
 
@@ -345,7 +350,7 @@ func TestHandler_ServiceError(t *testing.T) {
 		err: assert.AnError,
 	}
 
-	handler := NewHandler(mockSvc, slog.Default())
+	handler := newTestHandler(mockSvc)
 	r := gin.New()
 	handler.RegisterRoutes(r)
 

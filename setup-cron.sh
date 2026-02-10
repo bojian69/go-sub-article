@@ -72,7 +72,7 @@ CURRENT_CRONTAB=$(crontab -l 2>/dev/null || echo "")
 # 检查是否已存在相关任务
 if echo "$CURRENT_CRONTAB" | grep -q "$CRON_MARKER"; then
     echo -e "${YELLOW}检测到已存在的计划任务，将进行更新...${NC}"
-    # 删除旧的任务（删除标记行和下一行）
+    # 删除旧的任务（删除标记行和相关行）
     NEW_CRONTAB=$(echo "$CURRENT_CRONTAB" | grep -v "$CRON_MARKER" | grep -v "wechat-subscription-svc/auto-release.sh")
 else
     NEW_CRONTAB="$CURRENT_CRONTAB"

@@ -18,13 +18,15 @@
 
 ## 技术栈
 
-- Go 1.22+
+- Go 1.25+
 - Gin (HTTP 框架)
 - gRPC
 - Redis (Token 缓存)
 - Uber FX (依赖注入)
 - slog + lumberjack (结构化日志 + 按天轮转)
 - gopter (属性测试)
+- GitHub Actions (CI/CD)
+- Docker Buildx (多架构镜像构建)
 
 ## 项目结构
 
@@ -44,8 +46,12 @@
 │   ├── logger/             # 日志模块（slog + 文件轮转）
 │   ├── repository/cache/   # Redis 缓存
 │   ├── service/            # 业务服务
+│   ├── version/            # 版本信息（ldflags 注入）
 │   └── wechat/             # 微信 API 客户端
 ├── web/                    # 前端测试页面
+├── .github/workflows/      # CI/CD 工作流
+│   ├── ci.yaml             # CI: lint + security + test + build
+│   └── cd.yaml             # CD: 多架构镜像构建与推送
 ├── Dockerfile
 ├── docker-compose.yml
 └── Makefile
@@ -139,6 +145,33 @@ make docker-logs
 
 # 停止服务
 make docker-down
+```
+
+构建时可注入版本信息：
+
+```bash
+# 本地构建（注入版本信息）
+docker build \
+  --build-arg VERSION=v26.2.9 \
+  --build-arg BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+  --build-arg GIT_COMMIT=$(git rev-parse HEAD) \
+  -t wechat-subscription-svc:v26.2.9 .
+
+# 多架构构建（需要 buildx）
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --build-arg VERSION=v26.2.9 \
+  --build-arg BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+  --build-arg GIT_COMMIT=$(git rev-parse HEAD) \
+  -t wechat-subscription-svc:v26.2.9 .
+```
+
+docker-compose 也支持版本注入：
+
+```bash
+# 使用环境变量传入版本信息
+VERSION=v26.2.9 BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ') GIT_COMMIT=$(git rev-parse HEAD) \
+  docker-compose up -d
 ```
 
 ### 4. 访问服务
@@ -248,6 +281,47 @@ crontab -l
 # 查看执行日志
 tail -f auto-release.log
 ```
+
+## CI/CD
+
+项目使用 GitHub Actions 实现自动化 CI/CD。
+
+### CI 流水线
+
+Push 到 main 或 PR 到 main 时自动触发：
+
+```
+lint (gofmt + go vet + golangci-lint)
+  ├── security (govulncheck 漏洞扫描)
+  └── test (单元测试 + 覆盖率检查)
+        └── build (Go 编译 + Docker 构建验证)
+```
+
+### CD 流水线
+
+推送 `v*` 格式的 tag 时自动触发：
+
+```bash
+# 推送 tag 触发自动构建和推送
+git tag v26.2.9
+git push origin v26.2.9
+```
+
+CD 会自动：
+1. 构建 `linux/amd64` + `linux/arm64` 多架构 Docker 镜像
+2. 注入版本信息（VERSION、BUILD_TIME、GIT_COMMIT）
+3. 推送到 Docker Registry，打上版本标签和 `latest` 标签
+
+### GitHub Secrets 配置
+
+在 repo Settings → Secrets and variables → Actions 中配置：
+
+| Secret | 说明 | 示例 |
+|--------|------|------|
+| `DOCKER_REGISTRY` | Registry 地址 | `docker.io` |
+| `DOCKER_NAMESPACE` | 命名空间/用户名 | `myusername` |
+| `DOCKER_USERNAME` | 登录用户名 | `myusername` |
+| `DOCKER_PASSWORD` | 登录密码/Token | `dckr_pat_xxx` |
 
 ## 架构设计
 

@@ -48,11 +48,17 @@ type RedisRepository struct {
 }
 
 // NewRedisRepository creates a new Redis repository.
-func NewRedisRepository(addr, password string, db int) (*RedisRepository, error) {
+func NewRedisRepository(addr, username, password string, db int) (*RedisRepository, error) {
 	client := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: password,
-		DB:       db,
+		Addr:         addr,
+		Username:     username,
+		Password:     password,
+		DB:           db,
+		PoolSize:     20,
+		MinIdleConns: 5,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
 	})
 
 	// Test connection

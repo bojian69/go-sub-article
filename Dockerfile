@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
@@ -16,8 +16,18 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Build arguments for version injection
+ARG VERSION=dev
+ARG BUILD_TIME=unknown
+ARG GIT_COMMIT=unknown
+
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/bin/server ./cmd/server
+RUN CGO_ENABLED=0 go build \
+    -ldflags="-w -s \
+    -X git.uhomes.net/uhs-go/wechat-subscription-svc/internal/version.Version=${VERSION} \
+    -X git.uhomes.net/uhs-go/wechat-subscription-svc/internal/version.BuildTime=${BUILD_TIME} \
+    -X git.uhomes.net/uhs-go/wechat-subscription-svc/internal/version.GitCommit=${GIT_COMMIT}" \
+    -o /app/bin/server ./cmd/server
 
 # Runtime stage
 FROM alpine:3.19

@@ -5,9 +5,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: wechat-subscription-svc
     ports:
-      - "8080:8080"   # HTTP API
+      - "8090:8090"   # HTTP API
       - "9090:9090"   # gRPC API
     environment:
       - TZ=Asia/Shanghai

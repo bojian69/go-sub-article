@@ -10,6 +10,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 
+	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/repository/cache"
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/service"
 )
 
@@ -33,14 +34,16 @@ type StandardResponse struct {
 // Handler implements the HTTP handlers.
 type Handler struct {
 	articleService service.ArticleService
+	cacheRepo      cache.Repository
 	validate       *validator.Validate
 	logger         *slog.Logger
 }
 
 // NewHandler creates a new HTTP handler.
-func NewHandler(articleService service.ArticleService, logger *slog.Logger) *Handler {
+func NewHandler(articleService service.ArticleService, cacheRepo cache.Repository, logger *slog.Logger) *Handler {
 	return &Handler{
 		articleService: articleService,
+		cacheRepo:      cacheRepo,
 		validate:       validator.New(),
 		logger:         logger,
 	}
@@ -48,6 +51,9 @@ func NewHandler(articleService service.ArticleService, logger *slog.Logger) *Han
 
 // RegisterRoutes registers all HTTP routes.
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
+	// Health check endpoint
+	r.GET("/health", h.HealthCheck)
+
 	// Serve static files for web UI
 	r.StaticFile("/", "./web/index.html")
 	r.StaticFile("/index.html", "./web/index.html")
@@ -63,6 +69,13 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			accounts.GET("/articles/:article_id", h.GetArticle)
 		}
 	}
+}
+
+// HealthCheck handles GET /health for container health probes.
+func (h *Handler) HealthCheck(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status": "ok",
+	})
 }
 
 // BatchGetArticles handles GET /v1/accounts/:authorizer_appid/articles
