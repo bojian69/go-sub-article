@@ -30,7 +30,7 @@ func TestProperty_CacheKeyFormatIncludesIdentifier(t *testing.T) {
 			}
 			key := FormatComponentTokenKey(appID)
 			return strings.Contains(key, appID) &&
-				strings.HasPrefix(key, "wechat:token:component:")
+				strings.HasPrefix(key, "wechat-sub-srv:token:component:")
 		},
 		gen.AlphaString().SuchThat(func(s string) bool { return len(s) > 0 && len(s) < 100 }),
 	))
@@ -43,7 +43,7 @@ func TestProperty_CacheKeyFormatIncludesIdentifier(t *testing.T) {
 			}
 			key := FormatAuthorizerTokenKey(appID)
 			return strings.Contains(key, appID) &&
-				strings.HasPrefix(key, "wechat:token:authorizer:")
+				strings.HasPrefix(key, "wechat-sub-srv:token:authorizer:")
 		},
 		gen.AlphaString().SuchThat(func(s string) bool { return len(s) > 0 && len(s) < 100 }),
 	))
@@ -129,8 +129,8 @@ func TestFormatComponentTokenKey(t *testing.T) {
 		appID    string
 		expected string
 	}{
-		{"wx123456", "wechat:token:component:wx123456"},
-		{"test_app", "wechat:token:component:test_app"},
+		{"wx123456", "wechat-sub-srv:token:component:wx123456"},
+		{"test_app", "wechat-sub-srv:token:component:test_app"},
 	}
 
 	for _, tt := range tests {
@@ -146,8 +146,8 @@ func TestFormatAuthorizerTokenKey(t *testing.T) {
 		appID    string
 		expected string
 	}{
-		{"wx789012", "wechat:token:authorizer:wx789012"},
-		{"auth_app", "wechat:token:authorizer:auth_app"},
+		{"wx789012", "wechat-sub-srv:token:authorizer:wx789012"},
+		{"auth_app", "wechat-sub-srv:token:authorizer:auth_app"},
 	}
 
 	for _, tt := range tests {

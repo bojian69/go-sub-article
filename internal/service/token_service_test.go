@@ -86,14 +86,14 @@ func (m *MockCacheRepository) SetCachedToken(appID, token string, ttl time.Durat
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.authorizerTokens[appID] = token
-	m.ttls["wechat:token:authorizer:"+appID] = ttl
+	m.ttls["wechat-sub-srv:token:authorizer:"+appID] = ttl
 }
 
 func (m *MockCacheRepository) SetCachedComponentToken(appID, token string, ttl time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.componentTokens[appID] = token
-	m.ttls["wechat:token:component:"+appID] = ttl
+	m.ttls["wechat-sub-srv:token:component:"+appID] = ttl
 }
 
 // MockWeChatClient is a mock implementation of client.Client

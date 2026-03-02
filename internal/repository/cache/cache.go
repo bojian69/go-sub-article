@@ -11,8 +11,8 @@ import (
 
 // Redis key format constants
 const (
-	ComponentTokenKeyFormat  = "wechat:token:component:%s"  // wechat:token:component:{component_appid}
-	AuthorizerTokenKeyFormat = "wechat:token:authorizer:%s" // wechat:token:authorizer:{authorizer_appid}
+	ComponentTokenKeyFormat  = "wechat-sub-srv:token:component:%s"  // wechat-sub-srv:token:component:{component_appid}
+	AuthorizerTokenKeyFormat = "wechat-sub-srv:token:authorizer:%s" // wechat-sub-srv:token:authorizer:{authorizer_appid}
 )
 
 // SafetyMargin is the time to subtract from token TTL for safety
