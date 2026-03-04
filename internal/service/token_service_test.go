@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -82,6 +83,14 @@ func (m *MockCacheRepository) Close() error {
 	return nil
 }
 
+func (m *MockCacheRepository) Get(ctx context.Context, key string, dest interface{}) error {
+	return fmt.Errorf("key not found: %s", key)
+}
+
+func (m *MockCacheRepository) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	return nil
+}
+
 func (m *MockCacheRepository) SetCachedToken(appID, token string, ttl time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -153,6 +162,14 @@ func (m *MockWeChatClient) GetAccessToken(ctx context.Context, appID, appSecret 
 		AccessToken: "mock_simple_access_token",
 		ExpiresIn:   7200,
 	}, nil
+}
+
+func (m *MockWeChatClient) SendSubscriptionMessage(ctx context.Context, accessToken string, req *wechat.SendSubscriptionMessageRequest) (*wechat.SendSubscriptionMessageResponse, error) {
+	return &wechat.SendSubscriptionMessageResponse{MsgID: 1}, nil
+}
+
+func (m *MockWeChatClient) GetSubscriptionTemplateList(ctx context.Context, accessToken string) (*wechat.GetTemplateListResponse, error) {
+	return &wechat.GetTemplateListResponse{}, nil
 }
 
 func (m *MockWeChatClient) GetAPICallCount() int32 {

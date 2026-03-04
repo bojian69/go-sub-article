@@ -50,6 +50,12 @@ type Client interface {
 
 	// GetPublishedArticle gets article details
 	GetPublishedArticle(ctx context.Context, accessToken string, articleID string) (*wechat.GetArticleResponse, error)
+
+	// SendSubscriptionMessage sends subscription message to user
+	SendSubscriptionMessage(ctx context.Context, accessToken string, req *wechat.SendSubscriptionMessageRequest) (*wechat.SendSubscriptionMessageResponse, error)
+
+	// GetSubscriptionTemplateList gets subscription message template list
+	GetSubscriptionTemplateList(ctx context.Context, accessToken string) (*wechat.GetTemplateListResponse, error)
 }
 
 // HTTPClient implements Client using HTTP.
@@ -291,4 +297,50 @@ func (c *HTTPClient) doRequest(ctx context.Context, method, url string, body int
 // This is useful for testing.
 func (c *HTTPClient) GetRetryCount() int {
 	return c.maxRetries
+}
+
+// SendSubscriptionMessage sends subscription message to user.
+func (c *HTTPClient) SendSubscriptionMessage(ctx context.Context, accessToken string, req *wechat.SendSubscriptionMessageRequest) (*wechat.SendSubscriptionMessageResponse, error) {
+	url := fmt.Sprintf("%s/cgi-bin/message/subscribe/send?access_token=%s", c.baseURL, accessToken)
+
+	// Create a context with 30 second timeout for this specific request
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	var resp wechat.SendSubscriptionMessageResponse
+	if err := c.doRequestWithRetry(ctx, http.MethodPost, url, req, &resp); err != nil {
+		return nil, err
+	}
+
+	// Check for WeChat API error
+	if resp.ErrCode != 0 {
+		c.logger.Error("WeChat API error",
+			slog.Int("errcode", resp.ErrCode),
+			slog.String("errmsg", resp.ErrMsg),
+		)
+		return nil, fmt.Errorf("wechat api error: code=%d, msg=%s", resp.ErrCode, resp.ErrMsg)
+	}
+
+	return &resp, nil
+}
+
+// GetSubscriptionTemplateList gets subscription message template list.
+func (c *HTTPClient) GetSubscriptionTemplateList(ctx context.Context, accessToken string) (*wechat.GetTemplateListResponse, error) {
+	url := fmt.Sprintf("%s/wxaapi/newtmpl/gettemplate?access_token=%s", c.baseURL, accessToken)
+
+	var resp wechat.GetTemplateListResponse
+	if err := c.doRequestWithRetry(ctx, http.MethodGet, url, nil, &resp); err != nil {
+		return nil, err
+	}
+
+	// Check for WeChat API error
+	if resp.ErrCode != 0 {
+		c.logger.Error("WeChat API error",
+			slog.Int("errcode", resp.ErrCode),
+			slog.String("errmsg", resp.ErrMsg),
+		)
+		return nil, fmt.Errorf("wechat api error: code=%d, msg=%s", resp.ErrCode, resp.ErrMsg)
+	}
+
+	return &resp, nil
 }

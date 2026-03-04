@@ -10,6 +10,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 
+	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/handler"
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/repository/cache"
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/service"
 )
@@ -33,19 +34,29 @@ type StandardResponse struct {
 
 // Handler implements the HTTP handlers.
 type Handler struct {
-	articleService service.ArticleService
-	cacheRepo      cache.Repository
-	validate       *validator.Validate
-	logger         *slog.Logger
+	articleService               service.ArticleService
+	cacheRepo                    cache.Repository
+	wechatCallbackHandler        *handler.WeChatCallbackHandler
+	subscriptionMessageHandler   *handler.SubscriptionMessageHandler
+	validate                     *validator.Validate
+	logger                       *slog.Logger
 }
 
 // NewHandler creates a new HTTP handler.
-func NewHandler(articleService service.ArticleService, cacheRepo cache.Repository, logger *slog.Logger) *Handler {
+func NewHandler(
+	articleService service.ArticleService,
+	cacheRepo cache.Repository,
+	wechatCallbackHandler *handler.WeChatCallbackHandler,
+	subscriptionMessageHandler *handler.SubscriptionMessageHandler,
+	logger *slog.Logger,
+) *Handler {
 	return &Handler{
-		articleService: articleService,
-		cacheRepo:      cacheRepo,
-		validate:       validator.New(),
-		logger:         logger,
+		articleService:             articleService,
+		cacheRepo:                  cacheRepo,
+		wechatCallbackHandler:      wechatCallbackHandler,
+		subscriptionMessageHandler: subscriptionMessageHandler,
+		validate:                   validator.New(),
+		logger:                     logger,
 	}
 }
 
@@ -53,6 +64,9 @@ func NewHandler(articleService service.ArticleService, cacheRepo cache.Repositor
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	// Health check endpoint
 	r.GET("/health", h.HealthCheck)
+
+	// WeChat callback verification endpoint
+	r.GET("/wechat/callback", h.WeChatCallback)
 
 	// Serve static files for web UI
 	r.StaticFile("/", "./web/index.html")
@@ -67,6 +81,13 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		{
 			accounts.GET("/articles", h.BatchGetArticles)
 			accounts.GET("/articles/:article_id", h.GetArticle)
+		}
+
+		// Subscription message routes
+		subscriptionMessage := v1.Group("/subscription-message")
+		{
+			subscriptionMessage.POST("/send", h.subscriptionMessageHandler.SendSubscriptionMessage)
+			subscriptionMessage.GET("/templates", h.subscriptionMessageHandler.GetTemplateList)
 		}
 	}
 }
@@ -216,4 +237,55 @@ func (h *Handler) errorResponse(c *gin.Context, httpStatus int, code int, messag
 // GenerateRequestID generates a unique request ID.
 func GenerateRequestID() string {
 	return uuid.New().String()
+}
+
+// WeChatCallback handles WeChat server verification requests.
+func (h *Handler) WeChatCallback(c *gin.Context) {
+	requestID := uuid.New().String()
+	c.Set("request_id", requestID)
+
+	h.logger.Info("[HTTP] WeChatCallback request",
+		slog.String("request_id", requestID),
+		slog.String("signature", c.Query("signature")),
+		slog.String("timestamp", c.Query("timestamp")),
+		slog.String("nonce", c.Query("nonce")),
+	)
+
+	// Parse query parameters
+	var req handler.ServerVerificationRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		h.logger.Error("[HTTP] failed to parse query parameters",
+			slog.String("request_id", requestID),
+			slog.String("error", err.Error()),
+		)
+		h.errorResponse(c, http.StatusBadRequest, CodeInvalidParam, "invalid parameters", requestID)
+		return
+	}
+
+	// Call verification service
+	resp, err := h.wechatCallbackHandler.VerifyServer(&req)
+	if err != nil {
+		h.logger.Error("[HTTP] verification service error",
+			slog.String("request_id", requestID),
+			slog.String("error", err.Error()),
+		)
+		h.errorResponse(c, http.StatusInternalServerError, CodeInternalErr, "verification failed", requestID)
+		return
+	}
+
+	// Check verification result
+	if !resp.Valid {
+		h.logger.Warn("[HTTP] verification failed",
+			slog.String("request_id", requestID),
+			slog.String("message", resp.Message),
+		)
+		c.String(http.StatusForbidden, "verification failed: %s", resp.Message)
+		return
+	}
+
+	// Return echostr for successful verification
+	h.logger.Info("[HTTP] verification success",
+		slog.String("request_id", requestID),
+	)
+	c.String(http.StatusOK, resp.Echostr)
 }

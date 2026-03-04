@@ -3,6 +3,7 @@ package cache
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -37,6 +38,12 @@ type Repository interface {
 
 	// DeleteToken deletes a cached token
 	DeleteToken(ctx context.Context, key string) error
+
+	// Get retrieves a cached value by key and unmarshals it into dest
+	Get(ctx context.Context, key string, dest interface{}) error
+
+	// Set caches a value with the given key and TTL
+	Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error
 
 	// Close closes the Redis connection
 	Close() error
@@ -133,6 +140,30 @@ func (r *RedisRepository) GetTokenTTL(ctx context.Context, key string) (time.Dur
 func (r *RedisRepository) DeleteToken(ctx context.Context, key string) error {
 	if err := r.client.Del(ctx, key).Err(); err != nil {
 		return fmt.Errorf("failed to delete token: %w", err)
+	}
+	return nil
+}
+
+// Get retrieves a cached value by key and unmarshals it into dest.
+func (r *RedisRepository) Get(ctx context.Context, key string, dest interface{}) error {
+	data, err := r.client.Get(ctx, key).Bytes()
+	if err == redis.Nil {
+		return fmt.Errorf("key not found: %s", key)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get key %s: %w", key, err)
+	}
+	return json.Unmarshal(data, dest)
+}
+
+// Set caches a value with the given key and TTL.
+func (r *RedisRepository) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("failed to marshal value: %w", err)
+	}
+	if err := r.client.Set(ctx, key, data, ttl).Err(); err != nil {
+		return fmt.Errorf("failed to set key %s: %w", key, err)
 	}
 	return nil
 }

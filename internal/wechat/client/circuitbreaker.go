@@ -101,6 +101,28 @@ func (c *CircuitBreakerClient) GetPublishedArticle(ctx context.Context, accessTo
 	return result.(*wechat.GetArticleResponse), nil
 }
 
+// SendSubscriptionMessage sends subscription message with circuit breaker protection.
+func (c *CircuitBreakerClient) SendSubscriptionMessage(ctx context.Context, accessToken string, req *wechat.SendSubscriptionMessageRequest) (*wechat.SendSubscriptionMessageResponse, error) {
+	result, err := c.cb.Execute(func() (any, error) {
+		return c.inner.SendSubscriptionMessage(ctx, accessToken, req)
+	})
+	if err != nil {
+		return nil, c.wrapError(err)
+	}
+	return result.(*wechat.SendSubscriptionMessageResponse), nil
+}
+
+// GetSubscriptionTemplateList gets subscription message template list with circuit breaker protection.
+func (c *CircuitBreakerClient) GetSubscriptionTemplateList(ctx context.Context, accessToken string) (*wechat.GetTemplateListResponse, error) {
+	result, err := c.cb.Execute(func() (any, error) {
+		return c.inner.GetSubscriptionTemplateList(ctx, accessToken)
+	})
+	if err != nil {
+		return nil, c.wrapError(err)
+	}
+	return result.(*wechat.GetTemplateListResponse), nil
+}
+
 // State returns the current circuit breaker state.
 func (c *CircuitBreakerClient) State() gobreaker.State {
 	return c.cb.State()

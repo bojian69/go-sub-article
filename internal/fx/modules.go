@@ -18,6 +18,7 @@ import (
 
 	pb "git.uhomes.net/uhs-go/wechat-subscription-svc/api/proto"
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/config"
+	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/handler"
 	grpchandler "git.uhomes.net/uhs-go/wechat-subscription-svc/internal/handler/grpc"
 	httphandler "git.uhomes.net/uhs-go/wechat-subscription-svc/internal/handler/http"
 	"git.uhomes.net/uhs-go/wechat-subscription-svc/internal/logger"
@@ -98,12 +99,21 @@ var ServiceModule = fx.Module("service",
 	fx.Provide(func(tokenSvc service.TokenService, wechatClient client.Client, logger *slog.Logger) service.ArticleService {
 		return service.NewArticleService(tokenSvc, wechatClient, logger)
 	}),
+	fx.Provide(func(tokenSvc service.TokenService, wechatClient client.Client, cacheRepo cache.Repository, logger *slog.Logger) service.SubscriptionMessageService {
+		return service.NewSubscriptionMessageService(tokenSvc, wechatClient, cacheRepo, logger)
+	}),
 )
 
 // HandlerModule provides HTTP and gRPC handlers.
 var HandlerModule = fx.Module("handler",
-	fx.Provide(func(articleSvc service.ArticleService, cacheRepo cache.Repository, logger *slog.Logger) *httphandler.Handler {
-		return httphandler.NewHandler(articleSvc, cacheRepo, logger)
+	fx.Provide(func(cfg *config.Config, logger *slog.Logger) *handler.WeChatCallbackHandler {
+		return handler.NewWeChatCallbackHandler(cfg, logger)
+	}),
+	fx.Provide(func(subMsgSvc service.SubscriptionMessageService, logger *slog.Logger) *handler.SubscriptionMessageHandler {
+		return handler.NewSubscriptionMessageHandler(subMsgSvc, logger)
+	}),
+	fx.Provide(func(articleSvc service.ArticleService, cacheRepo cache.Repository, callbackHandler *handler.WeChatCallbackHandler, subMsgHandler *handler.SubscriptionMessageHandler, logger *slog.Logger) *httphandler.Handler {
+		return httphandler.NewHandler(articleSvc, cacheRepo, callbackHandler, subMsgHandler, logger)
 	}),
 	fx.Provide(func(articleSvc service.ArticleService, logger *slog.Logger) *grpchandler.Handler {
 		return grpchandler.NewHandler(articleSvc, logger)

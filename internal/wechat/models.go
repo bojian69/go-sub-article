@@ -104,12 +104,18 @@ func (e *ErrorResponse) IsSuccess() bool {
 
 // Common WeChat API error codes
 const (
-	ErrCodeSuccess           = 0
-	ErrCodeInvalidCredential = 40001
-	ErrCodeAccessTokenExpired = 42001
-	ErrCodeAPIUnauthorized   = 48001
-	ErrCodeRateLimited       = 45009
-	ErrCodeInvalidArticleID  = 53600
+	ErrCodeSuccess                = 0
+	ErrCodeInvalidCredential      = 40001
+	ErrCodeAccessTokenExpired     = 42001
+	ErrCodeAPIUnauthorized        = 48001
+	ErrCodeRateLimited            = 45009
+	ErrCodeInvalidArticleID       = 53600
+	// Subscription message error codes
+	ErrCodeInvalidOpenID          = 40003 // OpenID invalid
+	ErrCodeTemplateNotFound       = 40037 // Template ID not found
+	ErrCodeSubscriptionExpired    = 43101 // User rejected or subscription expired
+	ErrCodeDataFieldTooLong       = 47003 // Data field value too long
+	ErrCodeSubscriptionRateLimit  = 45009 // Rate limit exceeded
 )
 
 // IsTokenExpiredError checks if the error code indicates token expiration.
@@ -121,4 +127,37 @@ func IsTokenExpiredError(errCode int) bool {
 func IsRetryableError(errCode int) bool {
 	// Network errors and rate limiting are retryable
 	return errCode == ErrCodeRateLimited
+}
+
+// SendSubscriptionMessageRequest represents the request to send subscription message.
+type SendSubscriptionMessageRequest struct {
+	ToUser           string                 `json:"touser"`
+	TemplateID       string                 `json:"template_id"`
+	Page             string                 `json:"page,omitempty"`
+	Data             map[string]interface{} `json:"data"`
+	MiniprogramState string                 `json:"miniprogram_state,omitempty"`
+	Lang             string                 `json:"lang,omitempty"`
+}
+
+// SendSubscriptionMessageResponse represents the response of subscription message send API.
+type SendSubscriptionMessageResponse struct {
+	ErrCode int    `json:"errcode"`
+	ErrMsg  string `json:"errmsg"`
+	MsgID   int64  `json:"msgid,omitempty"`
+}
+
+// GetTemplateListResponse represents the response of get template list API.
+type GetTemplateListResponse struct {
+	ErrCode int                      `json:"errcode"`
+	ErrMsg  string                   `json:"errmsg"`
+	Data    []SubscriptionTemplate   `json:"data"`
+}
+
+// SubscriptionTemplate represents a subscription message template.
+type SubscriptionTemplate struct {
+	PriTmplID string `json:"priTmplId"`
+	Title     string `json:"title"`
+	Content   string `json:"content"`
+	Example   string `json:"example"`
+	Type      int    `json:"type"`
 }

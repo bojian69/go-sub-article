@@ -55,9 +55,10 @@ func (r *RedisConfig) Addr() string {
 
 // WeChatConfig holds WeChat third-party platform configuration.
 type WeChatConfig struct {
-	SimpleMode  SimpleModeConfig   `mapstructure:"simple_mode"`
-	Component   ComponentConfig    `mapstructure:"component"`
-	Authorizers []AuthorizerConfig `mapstructure:"authorizers"`
+	SimpleMode    SimpleModeConfig   `mapstructure:"simple_mode"`
+	Component     ComponentConfig    `mapstructure:"component"`
+	Authorizers   []AuthorizerConfig `mapstructure:"authorizers"`
+	CallbackToken string             `mapstructure:"callback_token"` // Token for WeChat server verification
 }
 
 // SimpleModeConfig holds simple mode configuration (direct access_token).
